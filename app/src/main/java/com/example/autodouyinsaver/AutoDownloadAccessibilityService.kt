@@ -82,22 +82,32 @@ class AutoDownloadAccessibilityService : AccessibilityService() {
                 // Step 4: 等待系统动画与剪贴板写入完成
                 delay(1500)
 
-                // Step 5: 在主线程读取剪贴板（Android 13+ 强制要求）
-                var shareText = ""
+                // Step 5: Android 14+ / Android 16 后台读取剪贴板受限，使用透明 Activity 代理读取
                 try {
-                    val clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                    if (clipboardManager.hasPrimaryClip()) {
-                        shareText = clipboardManager.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
-                    }
+                    val intent = android.content.Intent(this@AutoDownloadAccessibilityService, ClipboardReaderActivity::class.java)
+                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                    startActivity(intent)
                 } catch (e: Exception) {
-                    Log.e(TAG, "读取剪贴板失败: ${e.message}")
+                    Log.e(TAG, "启动 ClipboardReaderActivity 失败: ${e.message}")
+                    isAutomating = false
                 }
 
+            } catch (e: Exception) {
+                Log.e(TAG, "自动化流程异常: ${e.message}")
+                e.printStackTrace()
+                Toast.makeText(this@AutoDownloadAccessibilityService, "解析出错: ${e.message}", Toast.LENGTH_LONG).show()
+                isAutomating = false
+            }
+        }
+    }
+
+    fun processShareText(shareText: String) {
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
                 Log.d(TAG, "剪贴板内容: $shareText")
 
                 if (shareText.isEmpty()) {
                     Toast.makeText(this@AutoDownloadAccessibilityService, "剪贴板为空，请重试", Toast.LENGTH_SHORT).show()
-                    isAutomating = false
                     return@launch
                 }
 
@@ -140,8 +150,7 @@ class AutoDownloadAccessibilityService : AccessibilityService() {
                     )
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "自动化流程异常: ${e.message}")
-                e.printStackTrace()
+                Log.e(TAG, "处理剪贴板数据异常: ${e.message}")
                 Toast.makeText(this@AutoDownloadAccessibilityService, "解析出错: ${e.message}", Toast.LENGTH_LONG).show()
             } finally {
                 isAutomating = false
