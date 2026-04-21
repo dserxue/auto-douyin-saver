@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">AutoDouyinSaver</string>
+    <string name="accessibility_service_description">此服务用于辅助在抖音中自动点击分享和获取视频链接，实现静默下载无水印视频功能。</string>
+</resources>
