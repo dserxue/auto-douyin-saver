@@ -141,7 +141,35 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             }
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            var storageGranted by remember { mutableStateOf(android.os.Environment.isExternalStorageManager()) }
+            LaunchedEffect(Unit) {
+                storageGranted = android.os.Environment.isExternalStorageManager()
+            }
+
+            PermissionItem(
+                title = "所有文件访问权限",
+                description = "用于卸载重装后能够自动恢复历史记录",
+                isGranted = storageGranted,
+                onClick = {
+                    if (!storageGranted) {
+                        try {
+                            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${context.packageName}"))
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                            context.startActivity(intent)
+                        }
+                    }
+                }
+            )
+            Spacer(modifier = Modifier.height(32.dp))
+        } else {
+            // Android 10 以下自动具备物理备份对应写入权限，前提是清单文件中包含存储权限
+            Spacer(modifier = Modifier.height(32.dp))
+        }
 
         Button(
             onClick = {
@@ -379,11 +407,15 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
                                         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as android.app.DownloadManager
                                         val uri = dm.getUriForDownloadedFile(item.id)
                                         if (uri != null) {
+                                            val mimeType = dm.getMimeTypeForDownloadedFile(item.id) ?: "*/*"
                                             val intent = Intent(Intent.ACTION_VIEW).apply {
-                                                setDataAndType(uri, "video/*")
+                                                setDataAndType(uri, mimeType)
                                                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                             }
-                                            try { context.startActivity(intent) } catch (e: Exception) { e.printStackTrace() }
+                                            try { context.startActivity(intent) } catch (e: Exception) {
+                                                Toast.makeText(context, "找不到可以打开该文件的应用", Toast.LENGTH_SHORT).show()
+                                                e.printStackTrace()
+                                            }
                                         } else {
                                             Toast.makeText(context, "物理文件已被移动或移除", Toast.LENGTH_SHORT).show()
                                         }
@@ -398,21 +430,25 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
                             onMenuAction = { action ->
                                 when (action) {
                                     ItemMenuAction.OPEN -> {
-                                        if (item.status == "已下载" && item.id != -1L) {
-                                            val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as android.app.DownloadManager
-                                            val uri = dm.getUriForDownloadedFile(item.id)
-                                            if (uri != null) {
-                                                val intent = Intent(Intent.ACTION_VIEW).apply {
-                                                    setDataAndType(uri, "video/*")
-                                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                }
-                                                try { context.startActivity(intent) } catch (e: Exception) { e.printStackTrace() }
-                                            } else {
-                                                Toast.makeText(context, "物理文件已被移动或移除", Toast.LENGTH_SHORT).show()
+                                    if (item.status == "已下载" && item.id != -1L) {
+                                        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as android.app.DownloadManager
+                                        val uri = dm.getUriForDownloadedFile(item.id)
+                                        if (uri != null) {
+                                            val mimeType = dm.getMimeTypeForDownloadedFile(item.id) ?: "*/*"
+                                            val intent = Intent(Intent.ACTION_VIEW).apply {
+                                                setDataAndType(uri, mimeType)
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            try { context.startActivity(intent) } catch (e: Exception) {
+                                                Toast.makeText(context, "找不到可以打开该文件的应用", Toast.LENGTH_SHORT).show()
+                                                e.printStackTrace()
                                             }
                                         } else {
-                                            Toast.makeText(context, "无法打开（${item.status}）", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "物理文件已被移动或移除", Toast.LENGTH_SHORT).show()
                                         }
+                                    } else {
+                                        Toast.makeText(context, "无法打开（${item.status}）", Toast.LENGTH_SHORT).show()
+                                    }
                                     }
                                     ItemMenuAction.DELETE -> { itemToDelete = item }
                                     ItemMenuAction.RENAME -> {
@@ -420,11 +456,19 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
                                         itemToRename = item
                                     }
                                     ItemMenuAction.OPEN_DOWNLOAD_PAGE -> {
-                                        // 跳转系统下载管理器
+                                        // 提取并打开原始链接
                                         try {
-                                            context.startActivity(Intent("android.intent.action.VIEW_DOWNLOADS"))
+                                            val text = item.originUrl
+                                            val matcher = java.util.regex.Pattern.compile("https?://[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|]").matcher(text)
+                                            if (matcher.find()) {
+                                                val urlString = matcher.group()
+                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(urlString))
+                                                context.startActivity(intent)
+                                            } else {
+                                                Toast.makeText(context, "未找到有效的链接", Toast.LENGTH_SHORT).show()
+                                            }
                                         } catch (e: Exception) {
-                                            Toast.makeText(context, "无法打开下载页面", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "无法打开原链接", Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                 }
@@ -548,7 +592,7 @@ fun HistoryItemCard(
                         onClick = { menuExpanded = false; onMenuAction(ItemMenuAction.RENAME) }
                     )
                     DropdownMenuItem(
-                        text = { Text("打开下载页") },
+                        text = { Text("打开原链接") },
                         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                         onClick = { menuExpanded = false; onMenuAction(ItemMenuAction.OPEN_DOWNLOAD_PAGE) }
                     )

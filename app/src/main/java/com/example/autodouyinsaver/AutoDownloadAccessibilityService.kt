@@ -66,21 +66,27 @@ class AutoDownloadAccessibilityService : AccessibilityService() {
                     return@launch
                 }
 
-                // Step 2: 等待底部分享面板弹出
-                delay(1200)
+                // Step 2: 极速轮询等待"复制链接"按钮弹出（每100ms检测一次，最多等1.5秒）
+                var copyClicked = false
+                for (i in 0 until 15) {
+                    delay(100)
+                    copyClicked = findAndClickNodeByText("复制链接") || findAndClickNodeByText("分享链接")
+                    if (copyClicked) break
+                }
 
-                // Step 3: 点击"复制链接"
-                val copyClicked = findAndClickNodeByText("复制链接") || findAndClickNodeByText("分享链接")
                 if (!copyClicked) {
                     Toast.makeText(this@AutoDownloadAccessibilityService, "未找到复制链接按钮", Toast.LENGTH_SHORT).show()
                     isAutomating = false
                     return@launch
                 }
 
-                Toast.makeText(this@AutoDownloadAccessibilityService, "已复制链接，正在暗中解析...", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@AutoDownloadAccessibilityService, "正在飞速提取...", Toast.LENGTH_SHORT).show()
 
-                // Step 4: 等待系统动画与剪贴板写入完成
-                delay(1500)
+                // Step 4: 等待系统动画与剪贴板写入完成 (由于现代手机非常快，缩短至 250ms 足矣)
+                delay(250)
+                
+                // 自动关闭分享面板或可能残留的弹窗
+                performGlobalAction(GLOBAL_ACTION_BACK)
 
                 // Step 5: Android 14+ / Android 16 后台读取剪贴板受限，使用透明 Activity 代理读取
                 try {
@@ -111,6 +117,8 @@ class AutoDownloadAccessibilityService : AccessibilityService() {
                     return@launch
                 }
 
+                Toast.makeText(this@AutoDownloadAccessibilityService, "已获取链接，开始解析...", Toast.LENGTH_SHORT).show()
+
                 // Step 6: 切换到 IO 线程发起网络解析（耗时操作不阻塞主线程）
                 val parseResult = kotlinx.coroutines.withContext(Dispatchers.IO) {
                     DouyinParser.parseUrl(shareText)
@@ -131,7 +139,8 @@ class AutoDownloadAccessibilityService : AccessibilityService() {
                             url,
                             "$title$suffix",
                             coverUrl,
-                            durationMs
+                            durationMs,
+                            shareText
                         )
                     }
                 } else {

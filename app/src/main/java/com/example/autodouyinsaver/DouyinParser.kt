@@ -90,24 +90,26 @@ object DouyinParser {
                 // 如果API duration为秒，这里可以乘以1000；如果是毫秒，直接取。通常部分API直接给毫秒
                 durationMs = data.optLong("duration", 0L)
                 
-                // 1. 优先处理图文/实况(live)格式，提取所有动态视频
+                // 1. 优先处理图文/实况(live)格式，只提取动态视频视频流
                 if (data.has("live_photo") && !data.isNull("live_photo")) {
                     val livePhotoArray = data.optJSONArray("live_photo")
                     if (livePhotoArray != null && livePhotoArray.length() > 0) {
                         for (i in 0 until livePhotoArray.length()) {
                             val item = livePhotoArray.optJSONObject(i)
+                            // 只提取实况照片的动态视频流，不需要图片
                             val videoUrl = item?.optString("video")
                             if (!videoUrl.isNullOrEmpty() && videoUrl.startsWith("http")) {
                                 resultUrls.add(videoUrl)
                             }
                         }
-                        if (resultUrls.isNotEmpty()) {
-                            return DouyinParseResult(title, coverUrl, durationMs, resultUrls)
-                        }
                     }
                 }
 
-                // 2. 常规无水印视频提取
+                if (resultUrls.isNotEmpty()) {
+                    return DouyinParseResult(title, coverUrl, durationMs, resultUrls)
+                }
+
+                // 3. 常规无水印视频提取
                 for (key in arrayOf("play", "url", "video_url", "video", "play_addr")) {
                     if (data.has(key) && !data.isNull(key)) {
                         val value = data.get(key)
