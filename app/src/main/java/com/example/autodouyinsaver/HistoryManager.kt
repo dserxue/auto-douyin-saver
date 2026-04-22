@@ -1,6 +1,7 @@
 package com.example.autodouyinsaver
 
 import android.content.Context
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -111,9 +112,15 @@ object HistoryManager {
             syncToExternalFile(newArray.toString())
             
             if (deleteFiles) {
-                val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as android.app.DownloadManager
-                for (id in ids) {
-                    downloadManager.remove(id)
+                try {
+                    val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as android.app.DownloadManager
+                    // 只删除有效的 DownloadManager 任务 ID（-1L 表示解析失败记录，无对应任务）
+                    val validIds = ids.filter { it > 0L }
+                    if (validIds.isNotEmpty()) {
+                        downloadManager.remove(*validIds.toLongArray())
+                    }
+                } catch (e: Exception) {
+                    Log.e("HistoryManager", "DownloadManager.remove() 失败: ${e.message}")
                 }
             }
         } catch (e: Exception) {

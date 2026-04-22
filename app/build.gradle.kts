@@ -23,7 +23,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true       // 开启 R8 代码压缩/混淆，移除未用代码
+            isShrinkResources = true     // 开启资源收缩，移除未引用的资源文件
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -56,5 +57,6 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     implementation("io.coil-kt:coil-compose:2.6.0")
-    implementation("androidx.compose.material:material-icons-extended")
+    // 只用 core 图标集（含 Delete/Edit/MoreVert/PlayArrow/Search），体积从 ~18MB→~1MB
+    implementation("androidx.compose.material:material-icons-core")
 }

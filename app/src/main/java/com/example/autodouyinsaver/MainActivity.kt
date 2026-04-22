@@ -22,7 +22,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
@@ -41,6 +40,9 @@ import coil.compose.AsyncImage
 import com.example.autodouyinsaver.ui.theme.AutoDouyinSaverTheme
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -257,6 +259,7 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
     }
 
     // ─── 批量删除对话框 ───
+    val coroutineScope = rememberCoroutineScope()
     if (showBatchDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showBatchDeleteDialog = false },
@@ -273,9 +276,18 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    HistoryManager.removeHistories(context, selectedIds.toList(), deletePhysicalFile)
-                    refresh(); isSelectionMode = false; selectedIds = setOf()
-                    showBatchDeleteDialog = false; deletePhysicalFile = false
+                    val idsToDelete = selectedIds.toList()
+                    val shouldDeleteFiles = deletePhysicalFile
+                    showBatchDeleteDialog = false
+                    isSelectionMode = false
+                    selectedIds = setOf()
+                    deletePhysicalFile = false
+                    coroutineScope.launch {
+                        withContext(Dispatchers.IO) {
+                            HistoryManager.removeHistories(context, idsToDelete, shouldDeleteFiles)
+                        }
+                        refresh()
+                    }
                 }) { Text("确认删除", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { showBatchDeleteDialog = false }) { Text("取消") } }
@@ -299,8 +311,16 @@ fun HistoryScreen(modifier: Modifier = Modifier) {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    HistoryManager.removeHistories(context, listOf(target.id), deleteSinglePhysicalFile)
-                    refresh(); itemToDelete = null; deleteSinglePhysicalFile = false
+                    val targetId = target.id
+                    val shouldDeleteFile = deleteSinglePhysicalFile
+                    itemToDelete = null
+                    deleteSinglePhysicalFile = false
+                    coroutineScope.launch {
+                        withContext(Dispatchers.IO) {
+                            HistoryManager.removeHistories(context, listOf(targetId), shouldDeleteFile)
+                        }
+                        refresh()
+                    }
                 }) { Text("删除", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { itemToDelete = null }) { Text("取消") } }
